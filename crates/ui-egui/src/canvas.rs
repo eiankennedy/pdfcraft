@@ -3272,13 +3272,16 @@ pub fn document_area(app: &mut PdfCraftApp, index: usize, ui: &mut egui::Ui) {
         && app.placed_signatures.contains(&app.views[index].id)
         && doc.info.annotations.iter().any(|a| a.fill_sign)
         && !doc.is_signed();
+    let app_hands_off = app.hands_off;
     let view = &mut app.views[index];
     // Opened without the owner password and something is restricted. The notice says so unless
     // the user turned it off (#4035): the restrictions themselves, and Document Properties ▸
     // Security, stay as they are.
     let secured = show_secured_notice && doc.security_summary().is_some_and(|s| !(s.owner || (s.permissions.modify() && s.permissions.assemble())));
     let repaired = !doc.repair_log().is_empty();
-    let notice = notices(view, doc, secured, repaired, lock_offer, crate::sign_ui::banner(&doc.signatures), ui, &t);
+    // Hands off (Workbench): only the pages, none of the notice bars over them
+    let notice =
+        if app_hands_off { None } else { notices(view, doc, secured, repaired, lock_offer, crate::sign_ui::banner(&doc.signatures), ui, &t) };
     apply_notice(app, index, notice);
     let Some(doc) = app.session.get(app.views[index].id) else { return };
     let info = &doc.info;

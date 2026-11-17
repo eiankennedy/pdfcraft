@@ -19,6 +19,9 @@ struct Pdf {
     client: ControlClient,
     /// eframe's `App` methods take a frame; nothing in PdfCraft's needs a real one.
     frame: eframe::Frame,
+    /// A file still opening (PdfCraft accepts `ui.open` at once and loads it over the next frames): its path
+    opening: Option<String>,
+    ctx: egui::Context,
 }
 
 impl EmbedApp for Pdf {
@@ -40,7 +43,32 @@ impl EmbedApp for Pdf {
         // PdfCraft answers control requests in `logic`; run it now (as eframe does while the window is
         // hidden) so a request it answers at once has its reply before this returns.
         eframe::App::logic(&mut self.app, ctx, &mut self.frame);
-        reply(&rx).to_string()
+        let out = reply(&rx);
+        if let Some(path) = out["result"]["accepted"].as_str() {
+            // answered once the file is open (the host runs frames until then)
+            self.opening = Some(path.to_owned());
+            return json!({"ok": true, "result": {"pending": true}}).to_string();
+        }
+        out.to_string()
+    }
+    fn settle(&mut self) -> Option<String> {
+        let path = self.opening.clone()?;
+        let rx = self.client.send("ui.state", json!({}));
+        eframe::App::logic(&mut self.app, &self.ctx, &mut self.frame);
+        let state = reply(&rx);
+        let opens = state["result"]["pending_opens"].as_array()?;
+        if !opens.is_empty() {
+            return None;
+        }
+        self.opening = None;
+        let doc = state["result"]["documents"].as_array().and_then(|d| d.iter().find(|d| d["path"].as_str() == Some(path.as_str())).cloned());
+        Some(
+            match doc {
+                Some(doc) => json!({"ok": true, "result": {"opened": path, "pages": doc["pages"]}}),
+                None => json!({"ok": false, "error": format!("couldn't open {path}")}),
+            }
+            .to_string(),
+        )
     }
     fn exit(&mut self) {
         eframe::App::on_exit(&mut self.app, None);
@@ -84,7 +112,7 @@ fn make(ctx: &egui::Context) -> Box<dyn EmbedApp> {
     for id in ["view.workbench", "view.handsOff"] {
         let _ = client.send("ui.command", json!({"id": id, "params": {"on": true}}));
     }
-    Box::new(Pdf { app, client, frame: eframe::Frame::_new_kittest() })
+    Box::new(Pdf { app, client, frame: eframe::Frame::_new_kittest(), opening: None, ctx: ctx.clone() })
 }
 
 craft_embed::export_embed!(make);
