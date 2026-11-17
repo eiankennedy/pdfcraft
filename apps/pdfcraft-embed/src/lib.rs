@@ -21,6 +21,8 @@ struct Pdf {
     frame: eframe::Frame,
     /// A file still opening (PdfCraft accepts `ui.open` at once and loads it over the next frames): its path
     opening: Option<String>,
+    /// A request answered over the next frames (a ui.drag, a click, typing): its reply, once the input has gone in
+    waiting: Option<Receiver<Reply>>,
     ctx: egui::Context,
 }
 
@@ -49,9 +51,22 @@ impl EmbedApp for Pdf {
             self.opening = Some(path.to_owned());
             return json!({"ok": true, "result": {"pending": true}}).to_string();
         }
+        if out["result"]["pending"] == json!(true) {
+            // the host runs frames (which feed the input in) and asks `settle` for the reply; dropping it here
+            // left the host waiting out its time for an answer that could never come
+            self.waiting = Some(rx);
+        }
         out.to_string()
     }
     fn settle(&mut self) -> Option<String> {
+        if let Some(rx) = &self.waiting {
+            let out = reply(rx);
+            if out["result"]["pending"] == json!(true) {
+                return None;
+            }
+            self.waiting = None;
+            return Some(out.to_string());
+        }
         let path = self.opening.clone()?;
         let rx = self.client.send("ui.state", json!({}));
         eframe::App::logic(&mut self.app, &self.ctx, &mut self.frame);
@@ -112,7 +127,7 @@ fn make(ctx: &egui::Context) -> Box<dyn EmbedApp> {
     for id in ["view.workbench", "view.handsOff"] {
         let _ = client.send("ui.command", json!({"id": id, "params": {"on": true}}));
     }
-    Box::new(Pdf { app, client, frame: eframe::Frame::_new_kittest(), opening: None, ctx: ctx.clone() })
+    Box::new(Pdf { app, client, frame: eframe::Frame::_new_kittest(), opening: None, waiting: None, ctx: ctx.clone() })
 }
 
 craft_embed::export_embed!(make);
