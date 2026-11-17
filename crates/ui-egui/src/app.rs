@@ -194,6 +194,7 @@ impl PdfCraftApp {
             document_copy: None,
             unlock_prompt: None,
             full_screen: false,
+            hands_off: false,
             inbox: Default::default(),
             startup_inbox: Default::default(),
             startup_superseded: false,
@@ -428,9 +429,10 @@ impl PdfCraftApp {
         }
     }
 
-    /// Read mode and full screen hide the hotbar (the quick tools), and its tools window with it.
+    /// Read mode, full screen and hands off hide the hotbar (the quick tools), and its tools
+    /// window with it.
     pub(crate) fn hotbar_hidden(&self) -> bool {
-        self.mode == crate::Mode::Read || self.full_screen
+        self.mode == crate::Mode::Read || self.full_screen || self.hands_off
     }
 
     /// The pages are covered, and no page key reaches them, a menu click's included: by a dialog or
@@ -870,6 +872,31 @@ impl PdfCraftApp {
         self.sync_window_frame(&ctx);
         if self.draws_window_frame() {
             window_controls::resize_edges(&ctx);
+        }
+        if self.hands_off {
+            // Hands off (Workbench): the active document's pages and nothing else around them;
+            // the palette, dialogs and notices still show over it.
+            let t = theme::Tokens::get(&ctx);
+            egui::CentralPanel::default().frame(egui::Frame::NONE.fill(t.pasteboard)).show(ui, |ui| {
+                if let Some(i) = self.active {
+                    match compare_ui::side_by_side(self, i) {
+                        Some((old, new)) => compare_ui::compare_area(self, old, new, ui),
+                        None => canvas::document_area(self, i, ui),
+                    }
+                }
+            });
+            self.window_preferences_frame(&ctx);
+            self.process_pending_edits();
+            palette::show(self, &ctx);
+            dialogs::show(self, &ctx);
+            self.show_progress(&ctx);
+            widgets::toast(self, &ctx);
+            self.finish_render_frame(&ctx);
+            if let Some(mut control) = self.control.take() {
+                control.finish_frame(&ctx, self);
+                self.control = Some(control);
+            }
+            return;
         }
         chrome::tab_strip(self, ui);
         // A document can hide the toolbars, the menu and the panels around it in its tab (ISO

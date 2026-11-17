@@ -1227,6 +1227,20 @@ version = "0.1.0"
 source = "git+https://github.com/storytold/craft-libs?rev=e2dc681a3#e2dc681a3ad8a47038da2f11ddd2c5e1c0454991"
 
 [[package]]
+name = "craft-embed"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "egui",
+ "egui-wgpu",
+ "log",
+ "png 0.18.1",
+ "pollster 0.4.0",
+ "raw-window-handle",
+ "wgpu",
+]
+
+[[package]]
 name = "craft-fonts-build"
 version = "0.1.0"
 source = "git+https://github.com/storytold/craft-libs?rev=e2dc681a3#e2dc681a3ad8a47038da2f11ddd2c5e1c0454991"
@@ -4708,6 +4722,17 @@ dependencies = [
  "sha2 0.11.1",
  "thiserror 2.0.21",
  "unicode-bidi",
+]
+
+[[package]]
+name = "pdfcraft-embed"
+version = "0.21.1"
+dependencies = [
+ "craft-embed",
+ "eframe",
+ "egui",
+ "pdfcraft-ui-egui",
+ "serde_json",
 ]
 
 [[package]]

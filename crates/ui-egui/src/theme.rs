@@ -5,6 +5,24 @@ use std::sync::Arc;
 
 use egui::epaint::text::{FallbackAlign, FontTweak, HintingTarget, SmoothHinting};
 use egui::{Color32, CornerRadius, FontData, FontDefinitions, FontFamily, FontId, Rect, Response, Stroke, Vec2, Visuals};
+use std::sync::atomic::{AtomicU32, Ordering};
+
+/// Workbench's look (dark, flat, its mode's accent) when PdfCraft runs inside Workbench's panel:
+/// 0 = off, else `0x01RRGGBB`. Set by the `view.workbench` command.
+static WORKBENCH: AtomicU32 = AtomicU32::new(0);
+
+/// Turn Workbench's look on with an accent colour, or off with `None`. Call [`apply`] after.
+pub fn set_workbench(accent: Option<Color32>) {
+    let v = accent.map_or(0, |c| 0x0100_0000 | (u32::from(c.r()) << 16) | (u32::from(c.g()) << 8) | u32::from(c.b()));
+    WORKBENCH.store(v, Ordering::Relaxed);
+}
+
+/// The accent Workbench set, when its look is on.
+pub fn workbench_accent() -> Option<Color32> {
+    let v = WORKBENCH.load(Ordering::Relaxed);
+    let [_, r, g, b] = v.to_be_bytes();
+    (v != 0).then(|| Color32::from_rgb(r, g, b))
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
 pub enum ThemeKind {
@@ -122,8 +140,47 @@ impl Tokens {
         }
     }
 
+    /// Workbench's palette: near-black surfaces, hairline borders, warm white text, its mode's
+    /// accent, square corners. Pages keep their own colours.
+    pub fn workbench(accent: Color32) -> Self {
+        let rgb = Color32::from_rgb;
+        Self {
+            kind: ThemeKind::Dark,
+            titlebar: rgb(0x12, 0x13, 0x16),
+            chrome: rgb(0x12, 0x13, 0x16),
+            panel: rgb(0x12, 0x13, 0x16),
+            pasteboard: rgb(0x06, 0x06, 0x07),
+            card: rgb(0x18, 0x19, 0x1C),
+            border: rgb(0x33, 0x34, 0x36),
+            divider: rgb(0x2A, 0x2B, 0x2D),
+            text: rgb(0xF2, 0xF1, 0xEE),
+            text_muted: rgb(0x98, 0x99, 0x98),
+            text_faint: rgb(0x83, 0x84, 0x85),
+            icon: rgb(0x98, 0x99, 0x98),
+            hover: rgb(0x1C, 0x1D, 0x20),
+            pressed: rgb(0x26, 0x27, 0x2A),
+            selected: rgb(0x26, 0x27, 0x2A),
+            accent,
+            accent_text: accent,
+            accent_soft: rgb(0x26, 0x27, 0x2A).lerp_to_gamma(accent, 0.18),
+            field: rgb(0x06, 0x06, 0x07),
+            badge_new: accent,
+            page_shadow: Color32::from_black_alpha(120),
+            radius: 0,
+        }
+    }
+
+    /// The tokens to draw with for `kind`: Workbench's while its look is on.
+    pub fn current(kind: ThemeKind) -> Self {
+        workbench_accent().map_or_else(|| Self::for_kind(kind), Self::workbench)
+    }
+
     /// Return the cached theme tokens, falling back to the light palette before the first apply.
+    /// Workbench's look, while on, wins over the cache.
     pub fn get(ctx: &egui::Context) -> Self {
+        if let Some(accent) = workbench_accent() {
+            return Self::workbench(accent);
+        }
         ctx.data(|d| d.get_temp::<Tokens>(egui::Id::unique("pdfcraft-theme"))).unwrap_or_else(|| Self::for_kind(ThemeKind::Light))
     }
 
@@ -429,7 +486,7 @@ pub fn apply(ctx: &egui::Context, kind: ThemeKind) {
     // Our saved choice owns the palette; both egui branches receive it below.
     ctx.set_theme(egui::ThemePreference::System);
     let rtl = crate::i18n::current().rtl();
-    let t = Tokens::for_kind(kind);
+    let t = Tokens::current(kind);
     ctx.data_mut(|d| d.insert_temp(egui::Id::unique("pdfcraft-theme"), t));
     let mut v = if t.dark() { Visuals::dark() } else { Visuals::light() };
     v.panel_fill = t.panel;
@@ -441,8 +498,9 @@ pub fn apply(ctx: &egui::Context, kind: ThemeKind) {
     v.selection.stroke = Stroke::new(1.0, t.accent);
     v.hyperlink_color = t.accent_text;
     v.override_text_color = Some(t.text);
-    v.window_corner_radius = CornerRadius::same(10);
-    v.menu_corner_radius = CornerRadius::same(8);
+    let flat = workbench_accent().is_some(); // Workbench is square-cornered
+    v.window_corner_radius = CornerRadius::same(if flat { 0 } else { 10 });
+    v.menu_corner_radius = CornerRadius::same(if flat { 0 } else { 8 });
     v.window_shadow = egui::Shadow { offset: [0, 8], blur: 28, spread: 0, color: Color32::from_black_alpha(if t.dark() { 110 } else { 38 }) };
     v.popup_shadow = egui::Shadow { offset: [0, 4], blur: 16, spread: 0, color: Color32::from_black_alpha(if t.dark() { 90 } else { 30 }) };
     for w in [&mut v.widgets.noninteractive, &mut v.widgets.inactive, &mut v.widgets.hovered, &mut v.widgets.active, &mut v.widgets.open] {

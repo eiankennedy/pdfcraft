@@ -2271,3 +2271,23 @@ fn accessible_labels_on_format_text_and_pin_dialog() {
     let char_spin = ok(&mut h, &c, "ui.inspect", json!({"query": "Character spacing", "role": "SpinButton"}));
     assert!(char_spin["count"].as_u64().unwrap() >= 1, "character spacing spin button has accessible label: {char_spin}");
 }
+
+#[test]
+fn hands_off_draws_only_the_pages_and_brings_the_panels_back() {
+    let (mut h, c) = harness();
+    ok(&mut h, &c, "ui.set", json!({"key":"panel", "value":"bookmarks"}));
+    h.run_steps(3);
+    h.get_by_label("This document has no bookmarks.");
+    let list = ok(&mut h, &c, "ui.commands", json!({}));
+    assert!(list["commands"].as_array().unwrap().iter().any(|x| x["id"] == "view.handsOff"));
+    assert!(list["commands"].as_array().unwrap().iter().any(|x| x["id"] == "view.workbench"));
+    assert_eq!(ok(&mut h, &c, "ui.command", json!({"id":"view.handsOff", "params":{"on":true}})), json!({"on": true}));
+    h.run_steps(3);
+    assert!(h.query_by_label("This document has no bookmarks.").is_none());
+    assert_eq!(ok(&mut h, &c, "ui.state", json!({}))["hands_off"], true);
+    assert_eq!(ok(&mut h, &c, "ui.state", json!({}))["documents"][0]["pages"], 5);
+    // No `on`: a toggle.
+    assert_eq!(ok(&mut h, &c, "ui.command", json!({"id":"view.handsOff"})), json!({"on": false}));
+    h.run_steps(3);
+    h.get_by_label("This document has no bookmarks.");
+}

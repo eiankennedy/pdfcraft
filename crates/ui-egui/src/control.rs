@@ -237,6 +237,10 @@ pub(crate) trait Host {
     fn command(&mut self, id: &str) -> Reply;
     /// Apply or reset the side panel layout from a control request.
     fn panel(&mut self, reset: bool, params: &Value) -> Reply;
+    /// Run a UI-only `view.*` command that takes parameters (`view.workbench`, `view.handsOff`).
+    fn view(&mut self, id: &str, _params: &Value) -> Reply {
+        Err(format!("unknown command {id:?} (see ui.commands)"))
+    }
     /// List the commands available to the control channel.
     fn commands(&self) -> Value;
     /// Set one application option from a control request.

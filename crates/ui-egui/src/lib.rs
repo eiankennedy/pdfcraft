@@ -69,6 +69,7 @@ pub mod i18n;
 pub mod theme;
 pub mod viewer_prefs;
 mod widgets;
+mod workbench;
 
 use pdfcraft_engine::{DocId, Session};
 
@@ -552,6 +553,9 @@ pub struct PdfCraftApp {
     document_copy: Option<DocumentCopy>,
     pub unlock_prompt: Option<UnlockPrompt>,
     pub full_screen: bool,
+    /// Hands off: only the page view is drawn (no tab strip, menus, toolbars, panels or quick
+    /// tools), for when an agent does the work in Workbench's panel. Set with `view.handsOff`.
+    pub hands_off: bool,
     /// Files delivered asynchronously (web drag-and-drop, web file picker).
     pub inbox: Inbox,
     /// The browser's startup `?file=` download. Unlike a deliberate Open or drop, a late

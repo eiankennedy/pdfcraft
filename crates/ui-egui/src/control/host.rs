@@ -51,6 +51,10 @@ impl Host for crate::PdfCraftApp {
         crate::side_panels::command(self, reset, params)
     }
 
+    fn view(&mut self, id: &str, params: &Value) -> Reply {
+        crate::workbench::command(self, id, params)
+    }
+
     fn quit(&mut self, ctx: &egui::Context) -> bool {
         self.request_quit(ctx)
     }
@@ -156,6 +160,8 @@ impl Host for crate::PdfCraftApp {
             "dialog": self.dialog.map(|d| format!("{d:?}")),
             "palette_open": self.palette_open,
             "theme": format!("{:?}", self.theme),
+            "workbench": crate::theme::workbench_accent().is_some(),
+            "hands_off": self.hands_off,
             "theme_preference": self.theme_preference,
             "show_page_edge_shadows": self.show_page_edge_shadows,
             "language": self.language,
@@ -181,6 +187,7 @@ impl Host for crate::PdfCraftApp {
             .map(|c| json!({ "id": c.id, "label": c.label, "menu": c.menu, "enabled": self.command_enabled(c), "shortcut": c.shortcut_for(cfg!(target_os = "macos")).map(|s| s.label(cfg!(target_os = "macos"))) }))
             .collect();
         list.push(json!({"id": "ui.panel", "label": "Side panel", "enabled": true, "params": "panel: tools or side; open: boolean; width: number (clamped to the panel's limits)"}));
+        list.extend(crate::workbench::listing());
         json!({ "commands": list })
     }
 
